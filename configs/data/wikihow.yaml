@@ -1,0 +1,6 @@
+train: wikihow-train
+valid: wikihow-valid
+tokenizer_name_or_path: gpt2
+cache_dir: ./data/wikihow
+wrap: True
+streaming: False
