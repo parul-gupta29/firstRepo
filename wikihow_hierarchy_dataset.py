@@ -26,14 +26,12 @@ class WikiHowHierarchyDataset(Dataset):
         max_length: int = 1024,
         split: str = "train[:95%]",
         cache_dir: str = "./data/wikihow",
-        separator_token: str = " [SEP] ",
     ):
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
         self.max_length = max_length
-        self.separator_token = separator_token
 
         # Load WikiHow dataset
         print(f"Loading WikiHow dataset (split: {split})...")
@@ -67,12 +65,15 @@ class WikiHowHierarchyDataset(Dataset):
         """
         Preprocess a single WikiHow item.
 
-        Structure:
-            [BOS] <summary tokens> [SEP] <content tokens> [EOS] [PAD...]
+        Structure (no [SEP] token):
+            [BOS] <summary tokens> <content tokens> [EOS] [PAD...]
 
         Hierarchy labels:
-            - 0 for summary tokens (including BOS, SEP)
+            - 0 for summary tokens (including BOS)
             - 1 for content tokens (including EOS)
+
+        The model learns to predict hierarchy level for each token.
+        The boundary between level 0 and level 1 is learned implicitly.
         """
         summary = item.get('summary', '') or ''
         content = item.get('text', '') or ''
@@ -93,26 +94,25 @@ class WikiHowHierarchyDataset(Dataset):
             content.strip(),
             add_special_tokens=False,
             truncation=True,
-            max_length=self.max_length - len(summary_tokens) - 3  # BOS, SEP, EOS
+            max_length=self.max_length - len(summary_tokens) - 2  # BOS, EOS only
         )
 
         # Skip if either is empty after tokenization
         if len(summary_tokens) == 0 or len(content_tokens) == 0:
             return None
 
-        # Build full sequence: [BOS] summary [SEP] content [EOS]
+        # Build full sequence: [BOS] summary content [EOS] (no SEP)
         bos_id = self.tokenizer.bos_token_id or self.tokenizer.cls_token_id or 0
         eos_id = self.tokenizer.eos_token_id or self.tokenizer.sep_token_id or 0
-        sep_id = self.tokenizer.sep_token_id or eos_id
 
-        input_ids = [bos_id] + summary_tokens + [sep_id] + content_tokens + [eos_id]
+        input_ids = [bos_id] + summary_tokens + content_tokens + [eos_id]
 
         # Create hierarchy labels
-        # Level 0: BOS + summary + SEP
+        # Level 0: BOS + summary
         # Level 1: content + EOS
         hierarchy_labels = (
-            [0] * (1 + len(summary_tokens) + 1) +  # BOS + summary + SEP = level 0
-            [1] * (len(content_tokens) + 1)         # content + EOS = level 1
+            [0] * (1 + len(summary_tokens)) +  # BOS + summary = level 0
+            [1] * (len(content_tokens) + 1)    # content + EOS = level 1
         )
 
         # Truncate if needed
@@ -130,8 +130,8 @@ class WikiHowHierarchyDataset(Dataset):
             'input_ids': torch.tensor(input_ids, dtype=torch.long),
             'hierarchy_labels': torch.tensor(hierarchy_labels, dtype=torch.long),
             'attention_mask': torch.tensor(attention_mask, dtype=torch.long),
-            'summary_length': 1 + len(summary_tokens) + 1,  # BOS + summary + SEP
-            'content_length': len(content_tokens) + 1,       # content + EOS
+            'summary_length': 1 + len(summary_tokens),      # BOS + summary
+            'content_length': len(content_tokens) + 1,      # content + EOS
         }
 
     def __len__(self) -> int:
