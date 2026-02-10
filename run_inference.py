@@ -223,15 +223,21 @@ def load_prompts_from_file(filepath):
 
 def create_evaluation_prompts_from_wikihow(num_prompts=100, cache_dir=None):
     """
-    Create evaluation prompts from WikiHow test set.
+    Create evaluation prompts from WikiHow HELD-OUT test set.
     Uses the first sentence of each article as the prompt.
+
+    Data splits:
+      - train[:90%]    = Training data
+      - train[90%:95%] = Validation data
+      - train[95%:]    = Test data (HELD-OUT, never seen during training)
     """
     import datasets
 
-    print(f"Loading WikiHow dataset for evaluation prompts...")
+    print(f"Loading WikiHow HELD-OUT test set for evaluation prompts...")
+    print(f"  (train[95%:] - never seen during training or validation)")
     dataset = datasets.load_dataset(
         'ajibawa-2023/WikiHow',
-        split='train[-5%:]',  # Use last 5% as test
+        split='train[95%:]',  # Held-out test set (never seen during training)
         cache_dir=cache_dir
     )
 

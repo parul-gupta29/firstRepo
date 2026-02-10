@@ -373,13 +373,19 @@ def get_dataset(
   elif dataset_name == 'wikihow-train':
     dataset = datasets.load_dataset(
       'ajibawa-2023/WikiHow',
-      split='train[:95%]',
+      split='train[:90%]',  # 90% for training
       cache_dir=cache_dir,
       streaming=streaming)
   elif dataset_name == 'wikihow-valid':
     dataset = datasets.load_dataset(
       'ajibawa-2023/WikiHow',
-      split='train[95%:]',
+      split='train[90%:95%]',  # 5% for validation
+      cache_dir=cache_dir,
+      streaming=streaming)
+  elif dataset_name == 'wikihow-test':
+    dataset = datasets.load_dataset(
+      'ajibawa-2023/WikiHow',
+      split='train[95%:]',  # 5% held-out test (never seen)
       cache_dir=cache_dir,
       streaming=streaming)
   else:
@@ -390,7 +396,7 @@ def get_dataset(
 
   if dataset_name in ['lambada', 'openwebtext-train',
                       'openwebtext-valid', 'wikihow-train',
-                      'wikihow-valid']:
+                      'wikihow-valid', 'wikihow-test']:
     data = dataset
   else:
     data = dataset[mode]
