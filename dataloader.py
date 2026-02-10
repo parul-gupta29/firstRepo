@@ -431,7 +431,7 @@ def get_dataset(
       text = example['article']
     else:
       text = example['text']
-    
+
     if detokenizer is not None:
       text = _apply_detokenizer(detokenizer)(text)
 
@@ -455,6 +455,90 @@ def get_dataset(
                          return_attention_mask=True,
                          return_token_type_ids=True)
     return tokens
+
+  def preprocess_wikihow_with_title(example):
+    """Special preprocessing for WikiHow that tracks title length."""
+    texts = example['text']
+
+    # Handle batched input
+    if isinstance(texts, str):
+      texts = [texts]
+
+    all_input_ids = []
+    all_attention_mask = []
+    all_title_length = []
+
+    for text in texts:
+      # Extract title (first line or first sentence)
+      lines = text.split('\n')
+      if len(lines) > 1 and lines[0].strip():
+        title = lines[0].strip()
+        content = '\n'.join(lines[1:]).strip()
+      else:
+        # Fallback: use first sentence as title
+        sentences = text.split('. ')
+        if len(sentences) > 1:
+          title = sentences[0] + '.'
+          content = '. '.join(sentences[1:])
+        else:
+          title = text[:50]  # First 50 chars as title
+          content = text[50:]
+
+      # Tokenize title and content separately
+      title_tokens = tokenizer.encode(title, add_special_tokens=False)
+      content_tokens = tokenizer.encode(content, add_special_tokens=False)
+
+      # Combine: [BOS] + title + content + [EOS]
+      # Title length = 1 (BOS) + len(title_tokens)
+      title_len = 1 + len(title_tokens)
+
+      full_tokens = [BOS] + title_tokens + content_tokens + [EOS]
+
+      # Truncate if needed
+      if len(full_tokens) > block_size:
+        full_tokens = full_tokens[:block_size-1] + [EOS]
+        # Adjust title_len if title itself was truncated
+        title_len = min(title_len, block_size)
+
+      # Pad if needed
+      attention_mask = [1] * len(full_tokens)
+      if len(full_tokens) < block_size:
+        pad_len = block_size - len(full_tokens)
+        full_tokens = full_tokens + [tokenizer.pad_token_id] * pad_len
+        attention_mask = attention_mask + [0] * pad_len
+
+      all_input_ids.append(full_tokens)
+      all_attention_mask.append(attention_mask)
+      all_title_length.append(title_len)
+
+    return {
+      'input_ids': all_input_ids,
+      'attention_mask': all_attention_mask,
+      'title_length': all_title_length,
+    }
+
+  # Use special preprocessing for WikiHow to track title_length
+  is_wikihow = dataset_name.startswith('wikihow')
+
+  if is_wikihow:
+    # WikiHow: use special preprocessing that tracks title_length
+    # Don't use wrap for WikiHow - process each article separately
+    if streaming:
+      tokenized_dataset = data.map(
+        preprocess_wikihow_with_title,
+        batched=True,
+        remove_columns=data.column_names,
+        desc='Tokenizing WikiHow with title')
+    else:
+      tokenized_dataset = data.map(
+        preprocess_wikihow_with_title,
+        batched=True,
+        num_proc=num_proc,
+        remove_columns=data.column_names,
+        load_from_cache_file=True,
+        desc='Tokenizing WikiHow with title')
+    tokenized_dataset.save_to_disk(_path)
+    return tokenized_dataset.with_format('torch')
 
   if streaming:
     tokenized_dataset = data.map(

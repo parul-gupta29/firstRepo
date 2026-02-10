@@ -362,7 +362,12 @@ class Diffusion(L.LightningModule):
       attention_mask = batch['attention_mask']
     else:
       attention_mask = None
-    losses = self._loss(batch['input_ids'], attention_mask)
+
+    # Get title_length if available (for WikiHow dataset)
+    # Title positions will never be masked during training
+    title_length = batch.get('title_length', None)
+
+    losses = self._loss(batch['input_ids'], attention_mask, title_length=title_length)
     loss = losses.loss
 
     if prefix == 'train':
@@ -572,16 +577,27 @@ class Diffusion(L.LightningModule):
         self.gen_ppl_metric.update(
           nlls, first_eos[..., 1:] + token_mask[..., 1:])
 
-  def q_xt(self, x, move_chance):
+  def q_xt(self, x, move_chance, title_length=None):
     """Computes the noisy sample xt.
 
     Args:
       x: int torch.Tensor with shape (batch_size,
-          diffusion_model_input_length), input. 
+          diffusion_model_input_length), input.
       move_chance: float torch.Tensor with shape (batch_size, 1).
+      title_length: int torch.Tensor with shape (batch_size,), optional.
+          If provided, positions 0:title_length[i] will never be masked
+          for sample i. This keeps the title as a fixed prompt.
     """
     move_indices = torch.rand(
       * x.shape, device=x.device) < move_chance
+
+    # Never mask title positions if title_length is provided
+    if title_length is not None:
+      batch_size, seq_len = x.shape
+      position_ids = torch.arange(seq_len, device=x.device).unsqueeze(0)  # [1, seq_len]
+      title_mask = position_ids < title_length.unsqueeze(1)  # [batch_size, seq_len]
+      move_indices = move_indices & ~title_mask  # Don't mask where title_mask is True
+
     xt = torch.where(move_indices, self.mask_index, x)
     return xt
 
@@ -844,7 +860,7 @@ class Diffusion(L.LightningModule):
                           dim=-1,
                           index=x0[:, :, None]).squeeze(-1)
 
-  def _forward_pass_diffusion(self, x0):
+  def _forward_pass_diffusion(self, x0, title_length=None):
     t = self._sample_t(x0.shape[0], x0.device)
     if self.T > 0:
       t = (t * self.T).to(torch.int)
@@ -863,7 +879,7 @@ class Diffusion(L.LightningModule):
       unet_conditioning = sigma[:, None]
       move_chance = 1 - torch.exp(-sigma[:, None])
 
-    xt = self.q_xt(x0, move_chance)
+    xt = self.q_xt(x0, move_chance, title_length=title_length)
     model_output = self.forward(xt, unet_conditioning)
     utils.print_nans(model_output, 'model_output')
 
@@ -893,7 +909,7 @@ class Diffusion(L.LightningModule):
     return - log_p_theta * (
       dsigma / torch.expm1(sigma))[:, None]
 
-  def _loss(self, x0, attention_mask):
+  def _loss(self, x0, attention_mask, title_length=None):
     (input_tokens, output_tokens,
      attention_mask) = self._maybe_sub_sample(
        x0, attention_mask)
@@ -903,8 +919,8 @@ class Diffusion(L.LightningModule):
       loss = - logprobs.gather(
         -1, output_tokens[:, :, None])[:, :, 0]
     else:
-      loss = self._forward_pass_diffusion(input_tokens)
-    
+      loss = self._forward_pass_diffusion(input_tokens, title_length=title_length)
+
     nlls = loss * attention_mask
     count = attention_mask.sum()
 
