@@ -463,12 +463,18 @@ def get_dataset(
     # Handle batched input
     if isinstance(texts, str):
       texts = [texts]
+    elif texts is None:
+      texts = []
 
     all_input_ids = []
     all_attention_mask = []
     all_title_length = []
 
     for text in texts:
+      # Skip None or empty texts
+      if text is None or not text.strip():
+        continue
+
       # Extract title (first line or first sentence)
       lines = text.split('\n')
       if len(lines) > 1 and lines[0].strip():
