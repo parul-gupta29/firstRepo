@@ -224,7 +224,7 @@ def load_prompts_from_file(filepath):
 def create_evaluation_prompts_from_wikihow(num_prompts=100, cache_dir=None):
     """
     Create evaluation prompts from WikiHow HELD-OUT test set.
-    Uses the first sentence of each article as the prompt.
+    Uses the title field as the prompt if available, otherwise first sentence.
 
     Data splits:
       - train[:90%]    = Training data
@@ -241,6 +241,10 @@ def create_evaluation_prompts_from_wikihow(num_prompts=100, cache_dir=None):
         cache_dir=cache_dir
     )
 
+    # Print available fields
+    if len(dataset) > 0:
+        print(f"  Available fields: {list(dataset[0].keys())}")
+
     prompts = []
     references = []
 
@@ -252,14 +256,24 @@ def create_evaluation_prompts_from_wikihow(num_prompts=100, cache_dir=None):
         if not text:
             continue
 
-        # Split into sentences and use first as prompt
-        sentences = text.split('. ')
-        if len(sentences) >= 2:
-            prompt = sentences[0] + '.'
-            reference = text
-            prompts.append(prompt)
-            references.append(reference)
+        # Try to get title field, fallback to first sentence
+        title = item.get('title') or item.get('headline') or item.get('TITLE') or None
 
+        if title:
+            prompt = title.strip()
+        else:
+            # Fallback: use first sentence
+            sentences = text.split('. ')
+            if len(sentences) >= 2:
+                prompt = sentences[0] + '.'
+            else:
+                continue
+
+        reference = text
+        prompts.append(prompt)
+        references.append(reference)
+
+    print(f"  Loaded {len(prompts)} prompts (using {'title' if title else 'first sentence'})")
     return prompts, references
 
 
