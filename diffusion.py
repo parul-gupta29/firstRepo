@@ -459,16 +459,27 @@ class Diffusion(L.LightningModule):
     # Only optimize trainable parameters (supports LoRA where most params are frozen)
     trainable_params = [p for p in self.backbone.parameters() if p.requires_grad]
     trainable_params.extend(self.noise.parameters())
+
+    # Use LoRA-specific LR when LoRA is enabled
+    lora_config = self.config.get('lora', None)
+    lr = lora_config.lr if (lora_config and lora_config.get('enabled', False) and lora_config.get('lr', None)) else self.config.optim.lr
+
     optimizer = torch.optim.AdamW(
       trainable_params,
-      lr=self.config.optim.lr,
+      lr=lr,
       betas=(self.config.optim.beta1,
              self.config.optim.beta2),
       eps=self.config.optim.eps,
       weight_decay=self.config.optim.weight_decay)
 
-    scheduler = hydra.utils.instantiate(
-      self.config.lr_scheduler, optimizer=optimizer)
+    # Use LoRA-specific warmup steps when available
+    warmup_override = lora_config.warmup_steps if (lora_config and lora_config.get('enabled', False) and lora_config.get('warmup_steps', None)) else None
+    if warmup_override is not None:
+      scheduler = hydra.utils.instantiate(
+        self.config.lr_scheduler, optimizer=optimizer, num_warmup_steps=warmup_override)
+    else:
+      scheduler = hydra.utils.instantiate(
+        self.config.lr_scheduler, optimizer=optimizer)
     scheduler_dict = {
       'scheduler': scheduler,
       'interval': 'step',
