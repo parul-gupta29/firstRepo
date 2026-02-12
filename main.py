@@ -190,8 +190,21 @@ def _train(config, logger, tokenizer):
         pretrained_model_name, 'pytorch_model.bin')
       pretrained_state_dict = torch.load(
         weights_path, map_location='cpu')
-    model.backbone.load_state_dict(pretrained_state_dict)
+    # Strip 'backbone.' prefix from keys since we load into model.backbone
+    backbone_state_dict = {}
+    for k, v in pretrained_state_dict.items():
+      if k.startswith('backbone.'):
+        backbone_state_dict[k[len('backbone.'):]] = v
+      else:
+        backbone_state_dict[k] = v
     del pretrained_state_dict
+    missing, unexpected = model.backbone.load_state_dict(
+      backbone_state_dict, strict=False)
+    if missing:
+      logger.warning(f'Missing keys when loading pretrained: {missing}')
+    if unexpected:
+      logger.warning(f'Unexpected keys when loading pretrained: {unexpected}')
+    del backbone_state_dict
     logger.info('Pretrained backbone loaded successfully.')
 
   trainer = hydra.utils.instantiate(
