@@ -1,0 +1,9 @@
+train: wikihow-train
+valid: wikihow-valid
+tokenizer_name_or_path: gpt2
+cache_dir: ./data/wikihow
+wrap: False  # WikiHow uses special preprocessing with title_length
+streaming: False
+# Note: WikiHow preprocessing keeps title unmasked during training
+# Title is used as prompt, content is generated
+# Sequence length is set in model config (default: 1024)
