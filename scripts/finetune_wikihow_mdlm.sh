@@ -1,5 +1,5 @@
 #!/bin/bash
-# Fine-tune pretrained MDLM (medium) from HuggingFace on WikiHow dataset
+# Fine-tune pretrained MDLM (small) from HuggingFace on WikiHow dataset
 # Usage: bash scripts/finetune_wikihow_mdlm.sh
 
 # Activate conda environment (uncomment if needed)
@@ -14,9 +14,9 @@ mkdir -p data/wikihow
 # Fine-tune from pretrained HuggingFace checkpoint (kuleshov-group/mdlm-owt)
 python main.py \
   mode=train \
-  model=medium \
+  model=small \
   data=wikihow \
-  wandb.name=mdlm-wikihow-medium-finetune \
+  wandb.name=mdlm-wikihow-small-finetune \
   parameterization=subs \
   model.length=1024 \
   pretrained_model_name=kuleshov-group/mdlm-owt \
