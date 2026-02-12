@@ -179,14 +179,19 @@ def _train(config, logger, tokenizer):
   if pretrained_model_name:
     logger.info(
       f'Loading pretrained backbone from: {pretrained_model_name}')
-    from models.dit import DIT
-    pretrained_backbone = DIT.from_pretrained(
-      pretrained_model_name,
-      config=config,
-      vocab_size=model.vocab_size)
-    model.backbone.load_state_dict(
-      pretrained_backbone.state_dict())
-    del pretrained_backbone
+    from huggingface_hub import hf_hub_download
+    try:
+      weights_path = hf_hub_download(
+        pretrained_model_name, 'model.safetensors')
+      from safetensors.torch import load_file
+      pretrained_state_dict = load_file(weights_path)
+    except Exception:
+      weights_path = hf_hub_download(
+        pretrained_model_name, 'pytorch_model.bin')
+      pretrained_state_dict = torch.load(
+        weights_path, map_location='cpu')
+    model.backbone.load_state_dict(pretrained_state_dict)
+    del pretrained_state_dict
     logger.info('Pretrained backbone loaded successfully.')
 
   trainer = hydra.utils.instantiate(
