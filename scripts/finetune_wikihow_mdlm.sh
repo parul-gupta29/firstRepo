@@ -1,5 +1,5 @@
 #!/bin/bash
-# Fine-tune pretrained MDLM (medium) from HuggingFace on WikiHow dataset
+# LoRA fine-tune pretrained MDLM (small) from HuggingFace on WikiHow dataset
 # Usage: bash scripts/finetune_wikihow_mdlm.sh
 
 # Activate conda environment (uncomment if needed)
@@ -11,15 +11,20 @@ mkdir -p outputs
 mkdir -p watch_folder
 mkdir -p data/wikihow
 
-# Fine-tune from pretrained HuggingFace checkpoint (kuleshov-group/mdlm-owt)
+# LoRA fine-tune from pretrained HuggingFace checkpoint (kuleshov-group/mdlm-owt)
 python main.py \
   mode=train \
-  model=medium \
+  model=small \
   data=wikihow \
-  wandb.name=mdlm-wikihow-medium-finetune \
+  wandb.name=mdlm-wikihow-small-lora \
   parameterization=subs \
   model.length=1024 \
   pretrained_model_name=kuleshov-group/mdlm-owt \
+  lora.enabled=true \
+  lora.r=16 \
+  lora.alpha=32 \
+  lora.dropout=0.05 \
+  'lora.target_modules=[attn_qkv,attn_out]' \
   loader.global_batch_size=128 \
   loader.batch_size=4 \
   loader.eval_batch_size=4 \
@@ -28,6 +33,6 @@ python main.py \
   trainer.max_steps=20000 \
   trainer.val_check_interval=2000 \
   trainer.devices=2 \
-  optim.lr=1e-4 \
+  optim.lr=2e-4 \
   checkpointing.resume_from_ckpt=false \
   seed=42

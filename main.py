@@ -179,15 +179,87 @@ def _train(config, logger, tokenizer):
   if pretrained_model_name:
     logger.info(
       f'Loading pretrained backbone from: {pretrained_model_name}')
-    from models.dit import DIT
-    pretrained_backbone = DIT.from_pretrained(
-      pretrained_model_name,
-      config=config,
-      vocab_size=model.vocab_size)
-    model.backbone.load_state_dict(
-      pretrained_backbone.state_dict())
-    del pretrained_backbone
+    from huggingface_hub import hf_hub_download
+    try:
+      weights_path = hf_hub_download(
+        pretrained_model_name, 'model.safetensors')
+      from safetensors.torch import load_file
+      pretrained_state_dict = load_file(weights_path)
+    except Exception:
+      weights_path = hf_hub_download(
+        pretrained_model_name, 'pytorch_model.bin')
+      pretrained_state_dict = torch.load(
+        weights_path, map_location='cpu')
+    # Strip 'backbone.' prefix from keys since we load into model.backbone
+    backbone_state_dict = {}
+    for k, v in pretrained_state_dict.items():
+      if k.startswith('backbone.'):
+        backbone_state_dict[k[len('backbone.'):]] = v
+      else:
+        backbone_state_dict[k] = v
+    del pretrained_state_dict
+    missing, unexpected = model.backbone.load_state_dict(
+      backbone_state_dict, strict=False)
+    if missing:
+      logger.warning(f'Missing keys when loading pretrained: {missing}')
+    if unexpected:
+      logger.warning(f'Unexpected keys when loading pretrained: {unexpected}')
+    del backbone_state_dict
     logger.info('Pretrained backbone loaded successfully.')
+
+  # Apply LoRA/QLoRA if configured
+  lora_config = config.get('lora', None)
+  if lora_config and lora_config.get('enabled', False):
+    from peft import LoraConfig, get_peft_model
+    logger.info('Applying LoRA to backbone.')
+
+    if lora_config.get('quantize', False):
+      import bitsandbytes as bnb
+      logger.info('Quantizing backbone to 4-bit (QLoRA).')
+      # Replace Linear layers with 4-bit quantized versions
+      for name, module in list(model.backbone.named_modules()):
+        for child_name, child in list(module.named_children()):
+          if isinstance(child, torch.nn.Linear):
+            quantized = bnb.nn.Linear4bit(
+              child.in_features,
+              child.out_features,
+              bias=child.bias is not None,
+              compute_dtype=torch.bfloat16,
+              quant_type='nf4',
+            )
+            quantized.weight = bnb.nn.Params4bit(
+              child.weight.data,
+              requires_grad=False,
+              quant_type='nf4',
+            )
+            if child.bias is not None:
+              quantized.bias = child.bias
+            setattr(module, child_name, quantized)
+      model.backbone = model.backbone.cuda()
+
+    target_modules = list(lora_config.target_modules)
+    peft_config = LoraConfig(
+      r=lora_config.r,
+      lora_alpha=lora_config.alpha,
+      lora_dropout=lora_config.dropout,
+      target_modules=target_modules,
+      bias='none',
+    )
+    model.backbone = get_peft_model(model.backbone, peft_config)
+
+    # Freeze all non-LoRA parameters
+    for name, param in model.backbone.named_parameters():
+      if 'lora_' not in name:
+        param.requires_grad = False
+
+    model.backbone.print_trainable_parameters()
+
+    # Disable EMA when using LoRA (EMA was initialized with pre-LoRA params)
+    if model.ema is not None:
+      logger.info('Disabling EMA for LoRA fine-tuning.')
+      model.ema = None
+
+    logger.info('LoRA applied successfully.')
 
   trainer = hydra.utils.instantiate(
     config.trainer,
