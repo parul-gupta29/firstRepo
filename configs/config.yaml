@@ -25,7 +25,6 @@ lora:
   target_modules:          # Modules to apply LoRA to
     - attn_qkv
     - attn_out
-  quantize: false          # Enable QLoRA (4-bit quantization)
 
 seed: 1
 
