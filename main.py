@@ -174,6 +174,21 @@ def _train(config, logger, tokenizer):
   model = diffusion.Diffusion(
     config, tokenizer=valid_ds.tokenizer)
 
+  # Load pretrained backbone weights for fine-tuning
+  pretrained_model_name = config.get('pretrained_model_name', None)
+  if pretrained_model_name:
+    logger.info(
+      f'Loading pretrained backbone from: {pretrained_model_name}')
+    from models.dit import DIT
+    pretrained_backbone = DIT.from_pretrained(
+      pretrained_model_name,
+      config=config,
+      vocab_size=model.vocab_size)
+    model.backbone.load_state_dict(
+      pretrained_backbone.state_dict())
+    del pretrained_backbone
+    logger.info('Pretrained backbone loaded successfully.')
+
   trainer = hydra.utils.instantiate(
     config.trainer,
     default_root_dir=os.getcwd(),
