@@ -29,7 +29,7 @@ lora:
 seed: 1
 
 loader:
-  global_batch_size: 512
+  global_batch_size: 1024
   eval_global_batch_size: ${.global_batch_size}
   # Note: batch_size and eval_batch_size are **per machine**
   batch_size: ${div_up:${.global_batch_size}, ${eval:${trainer.devices} * ${trainer.num_nodes}}}
@@ -66,7 +66,7 @@ eval:
 
 optim:
   weight_decay: 0
-  lr: 3e-4
+  lr: 1e-4
   beta1: 0.9
   beta2: 0.999
   eps: 1e-8
