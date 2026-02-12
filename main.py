@@ -213,30 +213,6 @@ def _train(config, logger, tokenizer):
     from peft import LoraConfig, get_peft_model
     logger.info('Applying LoRA to backbone.')
 
-    if lora_config.get('quantize', False):
-      import bitsandbytes as bnb
-      logger.info('Quantizing backbone to 4-bit (QLoRA).')
-      # Replace Linear layers with 4-bit quantized versions
-      for name, module in list(model.backbone.named_modules()):
-        for child_name, child in list(module.named_children()):
-          if isinstance(child, torch.nn.Linear):
-            quantized = bnb.nn.Linear4bit(
-              child.in_features,
-              child.out_features,
-              bias=child.bias is not None,
-              compute_dtype=torch.bfloat16,
-              quant_type='nf4',
-            )
-            quantized.weight = bnb.nn.Params4bit(
-              child.weight.data,
-              requires_grad=False,
-              quant_type='nf4',
-            )
-            if child.bias is not None:
-              quantized.bias = child.bias
-            setattr(module, child_name, quantized)
-      model.backbone = model.backbone.cuda()
-
     target_modules = list(lora_config.target_modules)
     peft_config = LoraConfig(
       r=lora_config.r,
