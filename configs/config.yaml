@@ -25,8 +25,8 @@ lora:
   target_modules:          # Modules to apply LoRA to
     - attn_qkv
     - attn_out
-    - mlp.0
-    - mlp.2
+    - "mlp\\.0"
+    - "mlp\\.2"
 
 seed: 1
 
