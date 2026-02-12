@@ -17,6 +17,16 @@ subs_masking: False
 
 pretrained_model_name: null  # HuggingFace model name for fine-tuning (e.g., kuleshov-group/mdlm-owt)
 
+lora:
+  enabled: false
+  r: 16                    # LoRA rank
+  alpha: 32                # LoRA alpha (scaling = alpha/r)
+  dropout: 0.05            # LoRA dropout
+  target_modules:          # Modules to apply LoRA to
+    - attn_qkv
+    - attn_out
+  quantize: false          # Enable QLoRA (4-bit quantization)
+
 seed: 1
 
 loader:

@@ -456,9 +456,11 @@ class Diffusion(L.LightningModule):
     #  "Detected call of `lr_scheduler.step()` before `optimizer.step()`. "
     #  Not clear if this is a problem or not.
     #  See: https://github.com/Lightning-AI/pytorch-lightning/issues/5558
+    # Only optimize trainable parameters (supports LoRA where most params are frozen)
+    trainable_params = [p for p in self.backbone.parameters() if p.requires_grad]
+    trainable_params.extend(self.noise.parameters())
     optimizer = torch.optim.AdamW(
-      itertools.chain(self.backbone.parameters(),
-                      self.noise.parameters()),
+      trainable_params,
       lr=self.config.optim.lr,
       betas=(self.config.optim.beta1,
              self.config.optim.beta2),
