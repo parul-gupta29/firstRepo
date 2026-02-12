@@ -15,6 +15,8 @@ time_conditioning: False
 T: 0  # 0 (continuous time) / 1000 
 subs_masking: False
 
+pretrained_model_name: null  # HuggingFace model name for fine-tuning (e.g., kuleshov-group/mdlm-owt)
+
 seed: 1
 
 loader:
