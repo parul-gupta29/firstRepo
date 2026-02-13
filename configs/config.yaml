@@ -22,8 +22,9 @@ lora:
   r: 16                    # LoRA rank
   alpha: 32                # LoRA alpha (scaling = alpha/r)
   dropout: 0.05            # LoRA dropout
-  lr: 3e-4                 # LoRA learning rate (higher than pretraining LR)
-  warmup_steps: 500        # LoRA warmup steps (shorter than pretraining)
+  lr: 5e-4                 # LoRA learning rate (higher than pretraining LR)
+  warmup_steps: 200        # LoRA warmup steps (shorter than pretraining)
+  global_batch_size: 64    # Smaller batch size for fine-tuning (more optimizer updates)
   modules_to_save:         # Modules to fully unfreeze (not LoRA-wrapped)
     - adaLN_modulation
   target_modules:          # Modules to apply LoRA to

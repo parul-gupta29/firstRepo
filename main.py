@@ -232,6 +232,15 @@ def _train(config, logger, tokenizer):
       logger.info('Disabling EMA for LoRA fine-tuning.')
       model.ema = None
 
+    # Override global_batch_size for LoRA fine-tuning
+    if lora_config.get('global_batch_size', None):
+      from omegaconf import OmegaConf
+      OmegaConf.update(config, 'loader.global_batch_size',
+                        lora_config.global_batch_size)
+      logger.info(
+        f'LoRA: overriding global_batch_size to '
+        f'{lora_config.global_batch_size}')
+
     logger.info('LoRA applied successfully.')
 
   trainer = hydra.utils.instantiate(
