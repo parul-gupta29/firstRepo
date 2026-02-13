@@ -19,11 +19,12 @@ pretrained_model_name: null  # HuggingFace model name for fine-tuning (e.g., kul
 
 lora:
   enabled: false
-  r: 16                    # LoRA rank
-  alpha: 32                # LoRA alpha (scaling = alpha/r)
+  r: 64                    # LoRA rank (higher for domain adaptation)
+  alpha: 128               # LoRA alpha (scaling = alpha/r = 2)
   dropout: 0.05            # LoRA dropout
   lr: 5e-4                 # LoRA learning rate (higher than pretraining LR)
   warmup_steps: 200        # LoRA warmup steps (shorter than pretraining)
+  lr_scheduler: cosine_decay_warmup  # Cosine decay to escape plateaus
   global_batch_size: 64    # Smaller batch size for fine-tuning (more optimizer updates)
   modules_to_save:         # Modules to fully unfreeze (not LoRA-wrapped)
     - adaLN_modulation
