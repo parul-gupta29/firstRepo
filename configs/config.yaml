@@ -24,6 +24,8 @@ lora:
   dropout: 0.05            # LoRA dropout
   lr: 3e-4                 # LoRA learning rate (higher than pretraining LR)
   warmup_steps: 500        # LoRA warmup steps (shorter than pretraining)
+  modules_to_save:         # Modules to fully unfreeze (not LoRA-wrapped)
+    - adaLN_modulation
   target_modules:          # Modules to apply LoRA to
     - attn_qkv
     - attn_out

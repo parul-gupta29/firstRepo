@@ -214,19 +214,16 @@ def _train(config, logger, tokenizer):
     logger.info('Applying LoRA to backbone.')
 
     target_modules = list(lora_config.target_modules)
+    modules_to_save = list(lora_config.modules_to_save) if lora_config.get('modules_to_save', None) else None
     peft_config = LoraConfig(
       r=lora_config.r,
       lora_alpha=lora_config.alpha,
       lora_dropout=lora_config.dropout,
       target_modules=target_modules,
-      bias='none',
+      modules_to_save=modules_to_save,
+      bias='all',
     )
     model.backbone = get_peft_model(model.backbone, peft_config)
-
-    # Freeze all non-LoRA parameters
-    for name, param in model.backbone.named_parameters():
-      if 'lora_' not in name:
-        param.requires_grad = False
 
     model.backbone.print_trainable_parameters()
 
