@@ -241,6 +241,22 @@ def _train(config, logger, tokenizer):
         f'LoRA: overriding global_batch_size to '
         f'{lora_config.global_batch_size}')
 
+    # Override LR scheduler for LoRA fine-tuning
+    if lora_config.get('lr_scheduler', None):
+      from omegaconf import OmegaConf, DictConfig, open_dict
+      new_scheduler = DictConfig({
+        '_target_': 'utils.CosineDecayWarmupLRScheduler',
+        't_in_epochs': False,
+        't_initial': config.trainer.max_steps - lora_config.warmup_steps,
+        'warmup_prefix': True,
+        'warmup_lr_init': 1e-6,
+        'warmup_t': lora_config.warmup_steps,
+        'lr_min': 1e-6,
+      })
+      with open_dict(config):
+        config.lr_scheduler = new_scheduler
+      logger.info('LoRA: using cosine decay LR scheduler')
+
     logger.info('LoRA applied successfully.')
 
   trainer = hydra.utils.instantiate(
