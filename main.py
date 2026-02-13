@@ -234,12 +234,20 @@ def _train(config, logger, tokenizer):
 
     # Override global_batch_size for LoRA fine-tuning
     if lora_config.get('global_batch_size', None):
-      from omegaconf import OmegaConf
-      OmegaConf.update(config, 'loader.global_batch_size',
-                        lora_config.global_batch_size)
+      from omegaconf import OmegaConf, open_dict
+      lora_gbs = lora_config.global_batch_size
+      OmegaConf.update(config, 'loader.global_batch_size', lora_gbs)
+      # Recompute accumulate_grad_batches since Hydra resolvers
+      # already ran with the original global_batch_size
+      num_devices = config.trainer.devices
+      num_nodes = config.trainer.num_nodes
+      per_device_bs = config.loader.batch_size
+      new_accum = max(1, lora_gbs // (num_devices * per_device_bs * num_nodes))
+      with open_dict(config):
+        config.trainer.accumulate_grad_batches = new_accum
       logger.info(
-        f'LoRA: overriding global_batch_size to '
-        f'{lora_config.global_batch_size}')
+        f'LoRA: overriding global_batch_size to {lora_gbs}, '
+        f'accumulate_grad_batches to {new_accum}')
 
     # Override LR scheduler for LoRA fine-tuning
     if lora_config.get('lr_scheduler', None):
