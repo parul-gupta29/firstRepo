@@ -473,8 +473,10 @@ class Diffusion(L.LightningModule):
       weight_decay=self.config.optim.weight_decay)
 
     # Use LoRA-specific warmup steps when available
+    # Skip for CosineDecayWarmupLRScheduler which uses warmup_t instead of num_warmup_steps
     warmup_override = lora_config.warmup_steps if (lora_config and lora_config.get('enabled', False) and lora_config.get('warmup_steps', None)) else None
-    if warmup_override is not None:
+    uses_cosine_scheduler = lora_config and lora_config.get('lr_scheduler', None) == 'cosine_decay_warmup'
+    if warmup_override is not None and not uses_cosine_scheduler:
       scheduler = hydra.utils.instantiate(
         self.config.lr_scheduler, optimizer=optimizer, num_warmup_steps=warmup_override)
     else:
