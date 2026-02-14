@@ -166,7 +166,7 @@ class Diffusion(L.LightningModule):
       assert self.parameterization == 'd3pm'
 
   def on_load_checkpoint(self, checkpoint):
-    if self.ema:
+    if self.ema and 'ema' in checkpoint:
       self.ema.load_state_dict(checkpoint['ema'])
     # Copied from:
     # https://github.com/Dao-AILab/flash-attention/blob/main/training/src/datamodules/language_modeling_hf.py#L41
