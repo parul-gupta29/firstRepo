@@ -38,8 +38,16 @@ from omegaconf.base import ContainerMetadata, Metadata
 torch.serialization.add_safe_globals([DictConfig, ListConfig, ContainerMetadata, Metadata])
 
 
+def _is_lora_checkpoint(state_dict):
+    """Check if checkpoint contains LoRA-wrapped weights."""
+    for key in state_dict:
+        if 'base_model.model.' in key or 'lora_A' in key or 'lora_B' in key:
+            return True
+    return False
+
+
 def load_model_from_checkpoint(checkpoint_path, device='cuda'):
-    """Load MDLM model from checkpoint."""
+    """Load MDLM model from checkpoint, with automatic LoRA detection."""
     print(f"Loading checkpoint from: {checkpoint_path}")
 
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
@@ -50,20 +58,80 @@ def load_model_from_checkpoint(checkpoint_path, device='cuda'):
         raise ValueError("Cannot find config in checkpoint")
 
     tokenizer = dataloader.get_tokenizer(config)
+    state_dict = checkpoint.get('state_dict', {})
 
-    model = diffusion.Diffusion.load_from_checkpoint(
-        checkpoint_path,
-        config=config,
-        tokenizer=tokenizer,
-        map_location=device,
-        weights_only=False
-    )
+    if _is_lora_checkpoint(state_dict):
+        print("Detected LoRA checkpoint — applying PEFT wrapper before loading weights.")
+        from peft import LoraConfig, get_peft_model
+
+        # Create base model (without loading state dict)
+        model = diffusion.Diffusion(config=config, tokenizer=tokenizer)
+
+        # Read LoRA config from checkpoint's saved config
+        lora_cfg = config.get('lora', None)
+        if lora_cfg and lora_cfg.get('enabled', False):
+            target_modules = list(lora_cfg.target_modules)
+            modules_to_save = list(lora_cfg.modules_to_save) if lora_cfg.get('modules_to_save', None) else None
+            peft_config = LoraConfig(
+                r=lora_cfg.r,
+                lora_alpha=lora_cfg.alpha,
+                lora_dropout=lora_cfg.dropout,
+                target_modules=target_modules,
+                modules_to_save=modules_to_save,
+                bias='all',
+            )
+        else:
+            # Fallback: infer LoRA config from state dict keys
+            print("  No lora config in checkpoint — using defaults (r=8, alpha=16).")
+            target_modules = []
+            for key in state_dict:
+                if 'lora_A' in key:
+                    # e.g. backbone.base_model.model.blocks.0.attn_qkv.lora_A.default.weight
+                    # extract the module name: attn_qkv
+                    parts = key.split('.')
+                    lora_idx = parts.index('lora_A')
+                    module_name = parts[lora_idx - 1]
+                    if module_name not in target_modules:
+                        target_modules.append(module_name)
+            modules_to_save = []
+            for key in state_dict:
+                if 'modules_to_save' in key:
+                    parts = key.split('.')
+                    ms_idx = parts.index('modules_to_save')
+                    module_name = parts[ms_idx - 2]  # e.g. adaLN_modulation
+                    if module_name not in modules_to_save:
+                        modules_to_save.append(module_name)
+            peft_config = LoraConfig(
+                r=8,
+                lora_alpha=16,
+                lora_dropout=0.0,
+                target_modules=target_modules,
+                modules_to_save=modules_to_save if modules_to_save else None,
+                bias='all',
+            )
+            print(f"  Inferred target_modules: {target_modules}")
+            print(f"  Inferred modules_to_save: {modules_to_save}")
+
+        model.backbone = get_peft_model(model.backbone, peft_config)
+        model.ema = None  # EMA is disabled for LoRA
+
+        # Load the state dict
+        model.load_state_dict(state_dict, strict=False)
+        print("LoRA model weights loaded.")
+    else:
+        model = diffusion.Diffusion.load_from_checkpoint(
+            checkpoint_path,
+            config=config,
+            tokenizer=tokenizer,
+            map_location=device,
+            weights_only=False
+        )
+
     model = model.to(device)
     model.eval()
 
-    # With this debug-friendly version:
+    # Debug info
     try:
-        # Try common MDLM config paths
         v_size = getattr(config.data, 'vocab_size', getattr(config.data, 'n_tokens', "Unknown"))
         s_len = getattr(config.model, 'length', getattr(config.model, 'seq_len', "Unknown"))
         print(f"Model loaded successfully!")
@@ -71,7 +139,6 @@ def load_model_from_checkpoint(checkpoint_path, device='cuda'):
         print(f"Sequence length: {s_len}")
     except Exception as e:
         print(f"Model loaded, but could not read all config keys: {e}")
-        # If it still fails, print the config keys to see the structure
         print("Available data keys:", config.data.keys())
 
     return model, tokenizer, config
