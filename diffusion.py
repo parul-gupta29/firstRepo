@@ -937,7 +937,21 @@ class Diffusion(L.LightningModule):
       loss = self._forward_pass_diffusion(input_tokens, title_length=title_length)
 
     nlls = loss * attention_mask
-    count = attention_mask.sum()
+
+    # Exclude title tokens from loss normalization: title positions
+    # are never masked in q_xt, so they contribute ~0 loss but
+    # inflate the denominator, causing high variance across batches
+    # with different title-to-content ratios.
+    if title_length is not None:
+      batch_size, seq_len = input_tokens.shape
+      position_ids = torch.arange(
+        seq_len, device=input_tokens.device).unsqueeze(0)
+      content_mask = (
+        attention_mask
+        * (position_ids >= title_length.unsqueeze(1)).float())
+      count = content_mask.sum()
+    else:
+      count = attention_mask.sum()
 
     batch_nll = nlls.sum()
     token_nll = batch_nll / count
