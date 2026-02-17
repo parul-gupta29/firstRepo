@@ -207,6 +207,17 @@ def _train(config, logger, tokenizer):
     del backbone_state_dict
     logger.info('Pretrained backbone loaded successfully.')
 
+    # Reinitialize EMA with pretrained weights (EMA was initialized
+    # with random params before pretrained loading)
+    if model.ema is not None:
+      logger.info('Reinitializing EMA with pretrained weights.')
+      import itertools
+      import models.ema as ema_module
+      model.ema = ema_module.ExponentialMovingAverage(
+        itertools.chain(model.backbone.parameters(),
+                        model.noise.parameters()),
+        decay=config.training.ema)
+
   # Apply LoRA/QLoRA if configured
   lora_config = config.get('lora', None)
   if lora_config and lora_config.get('enabled', False):
