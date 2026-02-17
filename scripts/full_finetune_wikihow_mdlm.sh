@@ -45,7 +45,7 @@ python main.py \
   trainer.gradient_clip_val=1.0 \
   trainer.precision=bf16 \
   training.ema=0.9999 \
-  training.importance_sampling=True \
+  training.importance_sampling=true \
   optim.lr=5e-6 \
   optim.weight_decay=0.01 \
   lr_scheduler=cosine_decay_warmup \
