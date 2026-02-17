@@ -45,7 +45,7 @@ python main.py \
   trainer.gradient_clip_val=1.0 \
   trainer.precision=bf16 \
   training.ema=0.9999 \
-  optim.lr=3e-5 \
+  optim.lr=5e-6 \
   optim.weight_decay=0.01 \
   lr_scheduler=cosine_decay_warmup \
   checkpointing.resume_from_ckpt=false \
