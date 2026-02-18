@@ -47,7 +47,11 @@ def _load_from_checkpoint(config, tokenizer):
     model = diffusion.Diffusion(
       config=config, tokenizer=tokenizer)
 
-    lora_cfg = config.get('lora', None)
+    # Read LoRA config from checkpoint's saved hyperparameters
+    # (must match the rank/alpha used during training)
+    ckpt_config = checkpoint.get(
+      'hyper_parameters', {}).get('config', config)
+    lora_cfg = ckpt_config.get('lora', None)
     if lora_cfg and lora_cfg.get('enabled', False):
       target_modules = list(lora_cfg.target_modules)
       modules_to_save = (
