@@ -30,7 +30,8 @@ def _load_from_checkpoint(config, tokenizer):
   return diffusion.Diffusion.load_from_checkpoint(
     config.eval.checkpoint_path,
     tokenizer=tokenizer,
-    config=config)
+    config=config,
+    weights_only=False)
 
 
 @L.pytorch.utilities.rank_zero_only
