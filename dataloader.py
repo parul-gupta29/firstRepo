@@ -662,7 +662,7 @@ def get_dataloaders(config, tokenizer, skip_train=False,
   
   if config.data.valid in ['text8', 'lm1b', 'ag_news']:
     validation_split = 'test'
-  elif config.data.valid in ['wikihow-valid']:
+  elif config.data.valid in ['wikihow-valid', 'wikihow-test']:
     validation_split = 'train'  # WikiHow uses train split with percentage
   else:
     validation_split = 'validation'

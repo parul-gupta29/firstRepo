@@ -1,0 +1,8 @@
+train: wikihow-train
+valid: wikihow-test
+tokenizer_name_or_path: gpt2
+cache_dir: ./data/wikihow
+wrap: False  # WikiHow uses special preprocessing with title_length
+streaming: False
+# Note: This config evaluates perplexity on the held-out WikiHow test set (5%)
+# Usage: python main.py mode=ppl_eval data=wikihow_test eval.checkpoint_path=<path>
