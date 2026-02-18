@@ -22,11 +22,75 @@ omegaconf.OmegaConf.register_new_resolver(
   'div_up', lambda x, y: (x + y - 1) // y)
 
 
+def _is_lora_checkpoint(state_dict):
+  """Check if checkpoint contains LoRA-wrapped weights."""
+  for key in state_dict:
+    if 'base_model.model.' in key or 'lora_A' in key or 'lora_B' in key:
+      return True
+  return False
+
+
 def _load_from_checkpoint(config, tokenizer):
   if 'hf' in config.backbone:
     return diffusion.Diffusion(
       config, tokenizer=tokenizer).to('cuda')
-  
+
+  checkpoint = torch.load(
+    config.eval.checkpoint_path,
+    map_location='cuda',
+    weights_only=False)
+  state_dict = checkpoint.get('state_dict', {})
+
+  if _is_lora_checkpoint(state_dict):
+    from peft import LoraConfig, get_peft_model
+
+    model = diffusion.Diffusion(
+      config=config, tokenizer=tokenizer)
+
+    lora_cfg = config.get('lora', None)
+    if lora_cfg and lora_cfg.get('enabled', False):
+      target_modules = list(lora_cfg.target_modules)
+      modules_to_save = (
+        list(lora_cfg.modules_to_save)
+        if lora_cfg.get('modules_to_save', None) else None)
+      peft_config = LoraConfig(
+        r=lora_cfg.r,
+        lora_alpha=lora_cfg.alpha,
+        lora_dropout=lora_cfg.dropout,
+        target_modules=target_modules,
+        modules_to_save=modules_to_save,
+        bias='all')
+    else:
+      # Fallback: infer LoRA config from state dict keys
+      target_modules = []
+      for key in state_dict:
+        if 'lora_A' in key:
+          parts = key.split('.')
+          lora_idx = parts.index('lora_A')
+          module_name = parts[lora_idx - 1]
+          if module_name not in target_modules:
+            target_modules.append(module_name)
+      modules_to_save = []
+      for key in state_dict:
+        if 'modules_to_save' in key:
+          parts = key.split('.')
+          ms_idx = parts.index('modules_to_save')
+          module_name = parts[ms_idx - 2]
+          if module_name not in modules_to_save:
+            modules_to_save.append(module_name)
+      peft_config = LoraConfig(
+        r=8, lora_alpha=16, lora_dropout=0.0,
+        target_modules=target_modules,
+        modules_to_save=modules_to_save if modules_to_save
+          else None,
+        bias='all')
+
+    model.backbone = get_peft_model(
+      model.backbone, peft_config)
+    model.ema = None
+    model.load_state_dict(state_dict, strict=False)
+    return model
+
   return diffusion.Diffusion.load_from_checkpoint(
     config.eval.checkpoint_path,
     tokenizer=tokenizer,
